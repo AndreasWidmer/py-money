@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import abc
 import datetime
-import plistlib
 import json
+import plistlib
 import re
-
-from typing import Iterable, Optional, List, Dict, Set, Any
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from .. import utils
 
 
 def serialize(obj) -> str:
-    """ helper function to serialize an object """
+    """helper function to serialize an object"""
     if isinstance(obj, datetime.datetime):
         return str(obj.date())
     return str(obj)
@@ -23,23 +22,23 @@ class Comment:
 
     def __init__(self, s: Optional[str]):
         self.text = ""
-        self.tags : Set[str] = set()
+        self.tags: Set[str] = set()
         self.parse(s or "")
         self.changed = False
 
     def parse(self, s: str) -> None:
-        """ parse a comment into the text part and a list of tags """
+        """parse a comment into the text part and a list of tags"""
         self.tags = set(m.group("tag") for m in self.TAG_REGEX.finditer(s))
         self.text = self.TAG_REGEX.sub("", s).strip()
 
     def add(self, tag: str) -> None:
-        """ add a tag """
+        """add a tag"""
         if tag not in self.tags:
             self.changed = True
             self.tags.add(tag)
 
     def remove(self, tag: str) -> None:
-        """ remove a tag """
+        """remove a tag"""
         if tag in self.tags:
             self.changed = True
             self.tags.remove(tag)
@@ -53,7 +52,8 @@ class Comment:
 
 
 class _Base(abc.ABC):
-    """ Base class for Transactions and portfolio positions """
+    """Base class for Transactions and portfolio positions"""
+
     def __init__(self, account: Account, data):
         self.account = account
         self._backend = account._backend
@@ -78,11 +78,12 @@ class _Base(abc.ABC):
         return self.data.get(name, None)
 
     def get(self, name: str) -> Any:
-        """ similar to getattr, but never raises an exception """
+        """similar to getattr, but never raises an exception"""
         return self.data.get(name, None)
 
     def __repr__(self):
         return json.dumps(self.data, separators=(",", ":"), default=serialize)
+
 
 class Position(_Base):
     ATTRIBUTES = [
@@ -121,12 +122,17 @@ class Transaction(_Base):
         "purpose",
         "comment",
         "valueDate",
+        "accountUuid",
     ]
 
     def set_field(self, name: str, value: str) -> None:
         assert name in self.ATTRIBUTES
         txid = self.data["id"]
         self._backend.set_transaction_field(txid, name, value)
+
+    @property
+    def mm_accountUuid(self) -> str:
+        return self.data["accountUuid"]
 
     @property
     def payee(self) -> str:
@@ -166,6 +172,10 @@ class Account:
         self.data = data
 
     @property
+    def mm_uuid(self) -> str:
+        return self.data["uuid"]
+
+    @property
     def name(self) -> str:
         return self.data["name"]
 
@@ -185,7 +195,9 @@ class Account:
     def is_portfolio(self) -> bool:
         return self.data["portfolio"]
 
-    def transactions(self, age=90, start_date=None, end_date=None, **tx_filter) -> Iterable[Transaction]:
+    def transactions(
+        self, age=90, start_date=None, end_date=None, **tx_filter
+    ) -> Iterable[Transaction]:
         """extract transactions from the account which match the filter
 
         if start_data is given, it is generated from age
@@ -201,13 +213,15 @@ class Account:
         if start_date is None:
             start_date = datetime.date.today() - datetime.timedelta(days=age)
 
-        for tx_data in self._backend.get_transactions(self.account_number, start_date, end_date):
+        for tx_data in self._backend.get_transactions(
+            self.account_number, start_date, end_date
+        ):
             tx = Transaction(self, tx_data)
             if tx.pass_filter(**tx_filter):
                 yield tx
 
     def positions(self) -> Iterable[Position]:
-        """extract positions from a portfolio """
+        """extract positions from a portfolio"""
         if not self.is_portfolio:
             return
         for tx_data in self._backend.get_positions(self.account_number):
@@ -218,24 +232,23 @@ class Account:
 
 
 class BackendInterface(abc.ABC):
-    """ generoc inteface for a MoneyMoney Backend """
+    """generoc inteface for a MoneyMoney Backend"""
+
     # pylint: disable=unused-argument
 
     @abc.abstractmethod
-    def get_accounts(self):
-        ...
+    def get_accounts(self): ...
 
     @abc.abstractmethod
-    def get_transactions(self, account: str, start_date: datetime.date, end_date: Optional[datetime.date]):
-        ...
+    def get_transactions(
+        self, account: str, start_date: datetime.date, end_date: Optional[datetime.date]
+    ): ...
 
     @abc.abstractmethod
-    def get_positions(self, account: str):
-        ...
+    def get_positions(self, account: str): ...
 
     @abc.abstractmethod
-    def set_transaction_field(self, txid: str, name: str, value: str):
-        ...
+    def set_transaction_field(self, txid: str, name: str, value: str): ...
 
 
 class Backend(BackendInterface):
@@ -281,19 +294,22 @@ class Backend(BackendInterface):
 
 
 class MoneyMoney:
-    """ An interface to the MoneyMoney app """
+    """An interface to the MoneyMoney app"""
+
     def __init__(self, backend: BackendInterface = Backend()):
         self._backend = backend
         self.data = self._backend.get_accounts()
 
     def _accounts(self) -> Iterable[Account]:
-        """ return all accounts """
+        """return all accounts"""
         for account in self.data:
             if account.get("group") is not True:
                 yield Account(self._backend, account)
 
     def accounts(self) -> Iterable[Account]:
-        return (account for account in self._accounts() if account.is_portfolio is False)
+        return (
+            account for account in self._accounts() if account.is_portfolio is False
+        )
 
     def account(self, name: str) -> Optional[Account]:
         for account in self.accounts():
