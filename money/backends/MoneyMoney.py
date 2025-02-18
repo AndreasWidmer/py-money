@@ -123,6 +123,7 @@ class Transaction(_Base):
         "comment",
         "valueDate",
         "accountUuid",
+        "id",
     ]
 
     def set_field(self, name: str, value: str) -> None:
@@ -131,7 +132,11 @@ class Transaction(_Base):
         self._backend.set_transaction_field(txid, name, value)
 
     @property
-    def mm_accountUuid(self) -> str:
+    def mm_id(self) -> str:
+        return self.data["id"]
+
+    @property
+    def mm_account_id(self) -> str:
         return self.data["accountUuid"]
 
     @property
@@ -170,14 +175,27 @@ class Account:
     def __init__(self, backend: BackendInterface, data):
         self._backend = backend
         self.data = data
+        print(self.data)
 
     @property
-    def mm_uuid(self) -> str:
+    def account_type(self) -> str:
+        return self.data["type"]
+
+    @property
+    def bank_code(self) -> str:
+        return self.data["bankCode"]
+
+    @property
+    def mm_id(self) -> str:
         return self.data["uuid"]
 
     @property
     def name(self) -> str:
         return self.data["name"]
+
+    @property
+    def owner(self) -> str:
+        return self.data["owner"]
 
     @property
     def account_number(self) -> str:
@@ -194,6 +212,10 @@ class Account:
     @property
     def is_portfolio(self) -> bool:
         return self.data["portfolio"]
+
+    @property
+    def refresh_timestamp(self) -> datetime.datetime:
+        return self.data["refreshTimestamp"]
 
     def transactions(
         self, age=90, start_date=None, end_date=None, **tx_filter
